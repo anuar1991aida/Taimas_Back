@@ -1,0 +1,1 @@
+C:\Python310\python.exe C:\myback_dev\manage.py runserver 192.168.5.23:9000

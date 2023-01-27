@@ -1,0 +1,1 @@
+C:\Python310\python.exe C:\myback\arhive.py

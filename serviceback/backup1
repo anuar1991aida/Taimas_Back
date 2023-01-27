@@ -1,0 +1,125 @@
+from django.http import HttpResponse
+from rest_framework.decorators import api_view
+import json
+import requests  #pip install requests
+import os
+import multiprocessing
+from time import sleep
+import datetime
+from PIL import Image #pip install Pillow
+
+
+#Глобальные переменные
+i = 0   #Счетчик запуска параллельного процесса, если 0, то запускается, больше 0 не запускается.
+
+def chekresult(ind):
+    while 1==1:
+        path = '//192.168.10.254/FaceDastan/txt/'
+        listOfFiles = os.listdir(path)
+        for res in listOfFiles:
+            listname = res.split("-")
+            listname = listname[0].split("_")
+            org_id = listname[0]
+            group_id = listname[1]
+            group_id = group_id.replace('.txt', '')
+            f = open(path + res, 'r')
+            list_visited = ''
+
+            count = 0;
+            for line in f:
+                line = line.replace('C', '')
+                #print(line)
+                if count != 0:
+                    list_visited = list_visited + ', ' + line
+                else:
+                    list_visited = line
+                    count = count + 1;
+            f.close()
+            os.remove(path + res)
+
+            json_string = """
+            [
+              {
+                "org_ID": "_org_id_",
+                "group_mass": [
+                  {
+                    "group_ID": "_group_id_",
+                    "visited": [list_visited]
+                  },
+                ]
+              }
+            ]
+            """
+
+
+            json_string = json_string.replace('_org_id_', org_id)
+            json_string = json_string.replace('_group_id_', group_id)
+            json_string = json_string.replace('list_visited', list_visited)
+            print(list_visited)
+            print(datetime.datetime.now())
+            #data = json.loads(json_string)
+        sleep(1)
+
+
+
+@api_view(['POST','GET'])
+def postdata(request):
+    global i
+
+    org_id = request.GET.get("org_id")
+    group_id = request.GET.get("group_id")
+    img = request.FILES['image']
+    with open('//192.168.10.254/FaceDastan/temp/tem.jpg', 'wb+') as destination:
+        for chunk in img.chunks():
+            destination.write(chunk)
+    image = Image.open('//192.168.10.254/FaceDastan/temp/tem.jpg')
+
+
+    num = 0;
+    path = '//192.168.10.254/FaceDastan/imges_Ras/' + org_id + '_' + group_id +'.jpg';
+    fileexist = os.path.exists(path)
+    while fileexist:
+        num = num + 1
+        path = '//192.168.10.254/FaceDastan/imges_Ras/' + org_id + '_' + group_id + '-' + str(num) + '.jpg';
+        fileexist = os.path.exists(path)
+
+    image.save(path,quality=80,optimize=True)
+    #with open(path, 'wb+') as destination:
+    #    for chunk in img.chunks():
+    #        destination.write(chunk)
+    if i == 0:
+        t = multiprocessing.Process(target=chekresult, args=(1,))  #multiprocessing.Process(target=chekresult, args=(1,))
+        t.start()
+        i = 1
+    return HttpResponse("Photo writed")
+
+
+
+#Обновление всех папок всех учреждении в папке Register
+@api_view(['GET'])
+def update(request):
+    r = requests.get('https://192.168.5.19/ddo/hs/DDO/updateorg', headers = {'Authorization': 'Basic YWRtaW5fZGRvOjQ1Nis2NTQ='},verify=False)
+    data = r.json()
+    for chunk in data:
+        pathdir = '//192.168.10.254/FaceDastan/Register/' + str(chunk["org_ID"])
+        direxist = os.path.isdir(pathdir)
+        if not direxist:
+            os.mkdir(pathdir)
+        grouplist = chunk["group_mass"]
+        for gruppa in grouplist:
+            group = gruppa["group_ID"];
+            group = group.replace(' ', '')
+            pathgruppa = pathdir + "/" + group
+            gruppaexist = os.path.isdir(pathgruppa)
+            if not gruppaexist:
+                os.mkdir(pathgruppa)
+
+            childlist = gruppa["child_mass"]
+            for child in childlist:
+                children = child["child_iin"];
+                children = children.replace(' ', '')
+                pathchild = pathgruppa + "/C" + children
+                childexist = os.path.isdir(pathchild)
+                if not childexist:
+                    os.mkdir(pathchild)
+    return HttpResponse("Dannye polucheny uspeshno i vse papky sozdany")
